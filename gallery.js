@@ -44,6 +44,7 @@ const videoMeta = new Map();           // videoId -> {thumb, total, extStart, cr
 const videoUrlById = new Map();        // videoId -> url download (assets full-res)
 const childrenByParent = new Map();    // parentId -> [videoId]  (catena estensioni)
 const rootVideos = new Set();          // video senza foto-base (t2v "solo video")
+const inputMedia = new Map();          // sourceId -> {url(firmato), ext, created}  media sorgente (anche cancellati)
 const selected = new Map();            // id -> {url, ext, sub}
 const blobCache = new Map();
 
@@ -457,6 +458,13 @@ async function buildVideoIndex(ids) {
           } else {
             rootVideos.add(v.id); // nessun genitore = "solo video" (t2v)
           }
+          // media sorgente (input) della generazione: spesso upload poi cancellati, URL firmato
+          for (const im of (v.inputMediaItems || [])) {
+            if (im && im.id && im.mediaUrl && !inputMedia.has(im.id)) {
+              const ext = im.mimeType === "image/png" ? "png" : im.mimeType === "image/webp" ? "webp" : (im.mimeType === "video/mp4" ? "mp4" : "jpg");
+              inputMedia.set(im.id, { url: im.mediaUrl, ext, created: v.createTime || "" });
+            }
+          }
         }
       }
     } catch (e) {}
@@ -494,6 +502,13 @@ async function start() {
     existing.add(parentId); added++;
   }
   // aggiungi i "solo video" (t2v senza foto-base): una tessera per ogni terminale di catena
+  // recupera i MEDIA SORGENTE (inputMediaItems): spesso upload poi CANCELLATI, ancora referenziati
+  let inputAdded = 0;
+  for (const [sid, info] of inputMedia) {
+    if (existing.has(sid) || videoMeta.has(sid)) continue;
+    photos.push({ id: sid, fileUrl: info.url, thumbUrl: info.url, ext: info.ext, createTime: info.created });
+    existing.add(sid); inputAdded++;
+  }
   let soloVid = 0;
   for (const rootId of rootVideos) {
     const chain = [rootId, ...collectDescendantVideos(rootId)];
@@ -509,6 +524,6 @@ async function start() {
   render();
   document.getElementById("zipImages").textContent = `⬇ Tutte le immagini (${photos.length})`;
   document.getElementById("zipVideos").textContent = `⬇ Tutti i video finali (${allVideos.length})`;
-  statusEl.textContent = `${photos.length} elementi (incl. ${soloVid} solo-video, ${added} foto origine diversa) · ${allVideos.length} video finali. Clicca una foto per i suoi video, un video per riprodurlo.`;
+  statusEl.textContent = `${photos.length} elementi (${soloVid} solo-video · ${added} origine diversa · ${inputAdded} sorgenti recuperate, incl. cancellate) · ${allVideos.length} video finali.`;
 }
 start().catch((e) => (statusEl.textContent = "❌ " + (e.message || e)));
