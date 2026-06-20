@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="gallery.css" />
+  <title>Grok Imagine — Galleria & Selezione</title>
+</head>
+<body>
+  <header>
+    <h1>Grok Imagine — Galleria</h1>
+    <div class="actions">
+      <button id="zipVideos" class="ghost">⬇ Tutti i video (ZIP)</button>
+      <button id="zipImages" class="ghost">⬇ Tutte le immagini (ZIP)</button>
+      <button id="selAllPhotos" class="ghost">Seleziona foto</button>
+      <button id="selNone" class="ghost">Deseleziona</button>
+      <button id="delSelected" class="danger" disabled>🗑 Elimina selezionati</button>
+      <button id="download" class="primary" disabled>Scarica selezionati ZIP (<span id="selCount">0</span>)</button>
+    </div>
+  </header>
+  <p id="status">Carico la libreria dal tuo account…</p>
+  <div id="grid"></div>
+
+  <div id="modal" class="hidden">
+    <div class="modal-box">
+      <button id="modalClose" class="modal-close">✕</button>
+      <div class="modal-head">
+        <img id="modalImg" alt="" />
+        <div class="modal-meta">
+          <p id="modalPrompt" class="prompt"></p>
+          <label class="mselect"><input type="checkbox" id="selPhoto" /> Seleziona la foto</label>
+          <div class="mbtns">
+            <button id="selAllVids" class="ghost">Seleziona tutti i video</button>
+            <button id="delPhoto" class="danger">🗑 Elimina foto da Grok</button>
+          </div>
+          <p id="modalStatus" class="mstatus"></p>
+          <p class="vhint">Clicca un video per riprodurlo · 🗑 sul video per eliminarlo</p>
+        </div>
+      </div>
+      <h3 class="vtitle">Video annidati (<span id="vcount">0</span>)</h3>
+      <div id="modalVideos" class="vgrid"></div>
+    </div>
+  </div>
+
+  <div id="vplayer" class="hidden">
+    <div class="vp-card">
+      <button id="vpClose" class="modal-close">✕</button>
+      <video id="vpVideo" controls playsinline></video>
+      <p id="vpStatus" class="mstatus"></p>
+    </div>
+  </div>
+
+  <div id="zipOverlay" class="hidden">
+    <div class="zip-card">
+      <div id="zipSpinner" class="spinner"></div>
+      <h3 id="zipTitle">Creazione ZIP…</h3>
+      <div class="zbar"><div id="zipFill"></div></div>
+      <p id="zipStatus">Avvio…</p>
+      <p id="zipBytes" class="zbytes"></p>
+      <button id="zipDone" class="primary hidden">Chiudi</button>
+    </div>
+  </div>
+
+  <script type="module" src="gallery.js"></script>
+</body>
+</html>
