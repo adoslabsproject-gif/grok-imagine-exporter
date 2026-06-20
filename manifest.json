@@ -3,18 +3,26 @@
   "name": "Grok Imagine Exporter",
   "version": "1.0.0",
   "description": "Esporta in blocco le tue immagini e i tuoi video generati su Grok Imagine nella cartella Download.",
-  "permissions": ["downloads", "storage"],
+  "permissions": [
+    "downloads"
+  ],
   "host_permissions": [
     "https://grok.com/*",
     "https://assets.grok.com/*",
     "https://imagine-public.x.ai/*"
   ],
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "grok-imagine-exporter@addons",
       "strict_min_version": "128.0",
-      "data_collection_permissions": { "required": ["none"] }
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   },
   "icons": {

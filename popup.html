@@ -6,30 +6,10 @@
 </head>
 <body>
   <h1>Grok Imagine Exporter</h1>
-  <p class="hint">Scarica i tuoi media generati su Grok nella cartella Download.</p>
+  <p class="hint">Esporta le tue immagini e i tuoi video generati su Grok Imagine.</p>
 
-  <label class="folder">
-    Cartella di destinazione
-    <input id="folder" type="text" value="GrokExport" />
-  </label>
-
-  <button id="openGallery" class="gallery-btn">🖼️ Apri galleria — sfoglia &amp; seleziona</button>
-  <p class="ghint">griglia di foto → clicca una foto → vedi i suoi video annidati → scegli cosa scaricare</p>
-
-  <p class="sep">— oppure scarica TUTTO senza scegliere —</p>
-
-  <div class="buttons">
-    <button data-job="videos">🎬 Tutti i video generati</button>
-    <button data-job="images">🖼️ Tutte le immagini generate</button>
-  </div>
-
-  <div class="bar"><div id="fill"></div></div>
-  <p id="status">Pronto.</p>
-
-  <div class="footer">
-    <button id="cancel" class="ghost">Ferma</button>
-    <button id="reset" class="ghost">Azzera memoria</button>
-  </div>
+  <button id="openGallery" class="gallery-btn">🖼️ Apri galleria</button>
+  <p class="ghint">Tutto il download avviene nella galleria: anteprime, selezione, e <b>download come ZIP unico</b> con barra di avanzamento. Niente più file uno alla volta.</p>
 </body>
 <script src="popup.js"></script>
 </html>
