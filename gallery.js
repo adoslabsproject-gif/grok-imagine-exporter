@@ -472,8 +472,31 @@ async function buildVideoIndex(ids) {
   }
 }
 
+// bulk-get di una lista di id per pescare gli inputMediaItems (sorgenti, anche cancellate)
+async function harvestInputs(ids) {
+  for (let i = 0; i < ids.length; i += 200) {
+    try {
+      const r = await fetch(BULK_GET, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ ids: ids.slice(i, i + 200) })
+      });
+      if (!r.ok) continue;
+      for (const v of ((await r.json()).posts || [])) {
+        for (const im of (v.inputMediaItems || [])) {
+          if (im && im.id && im.mediaUrl && !inputMedia.has(im.id)) {
+            const ext = im.mimeType === "image/png" ? "png" : im.mimeType === "image/webp" ? "webp" : (im.mimeType === "video/mp4" ? "mp4" : "jpg");
+            inputMedia.set(im.id, { url: im.mediaUrl, ext, created: v.createTime || "" });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+}
+
 async function start() {
   await loadPhotos();
+  const genPhotoIds = photos.map((p) => p.id);
   photos.sort((a, b) => (b.createTime || "").localeCompare(a.createTime || ""));
   render();                                                   // mostra subito le foto
   document.getElementById("galleryLoading").classList.add("hidden");
@@ -482,6 +505,8 @@ async function start() {
   const vlist = await listAllVideos();
   vlist.forEach((v) => videoUrlById.set(v.id, v.url));
   await buildVideoIndex(vlist.map((v) => v.id));
+  statusEl.textContent = "Cerco le sorgenti delle immagini…";
+  await harvestInputs(genPhotoIds);   // inputMediaItems anche delle generazioni-immagine
   // tieni solo i TERMINALI: escludi gli intermedi (id che e genitore di un'estensione)
   allVideos = vlist.filter((v) => !childrenByParent.has(v.id));
   // aggiungi le foto-radice che hanno video ma non erano in SOURCE_GENERATED (origini diverse)
