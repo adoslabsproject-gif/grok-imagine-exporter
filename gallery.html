@@ -11,13 +11,14 @@
     <div class="actions">
       <button id="zipVideos" class="ghost">⬇ Tutti i video (ZIP)</button>
       <button id="zipImages" class="ghost">⬇ Tutte le immagini (ZIP)</button>
-      <button id="selAllPhotos" class="ghost">Seleziona foto</button>
+      <button id="selAllPhotos" class="ghost">Seleziona tutto</button>
+      <button id="selInvert" class="ghost">Inverti selezione</button>
       <button id="selNone" class="ghost">Deseleziona</button>
-      <button id="delSelected" class="danger" disabled>🗑 Elimina selezionati</button>
       <button id="download" class="primary" disabled>Scarica selezionati ZIP (<span id="selCount">0</span>)</button>
     </div>
   </header>
   <p id="status">Carico la libreria dal tuo account…</p>
+  <div id="galleryLoading"><div class="spinner"></div><p>Carico la libreria…</p></div>
   <div id="grid"></div>
 
   <div id="modal" class="hidden">
@@ -30,10 +31,9 @@
           <label class="mselect"><input type="checkbox" id="selPhoto" /> Seleziona la foto</label>
           <div class="mbtns">
             <button id="selAllVids" class="ghost">Seleziona tutti i video</button>
-            <button id="delPhoto" class="danger">🗑 Elimina foto da Grok</button>
           </div>
           <p id="modalStatus" class="mstatus"></p>
-          <p class="vhint">Clicca un video per riprodurlo · 🗑 per eliminarlo</p>
+          <p class="vhint">Clicca un video per riprodurlo</p>
         </div>
       </div>
       <h3 class="vtitle">Video annidati (<span id="vcount">0</span>)</h3>

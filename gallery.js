@@ -10,7 +10,6 @@ const grid = document.getElementById("grid");
 const statusEl = document.getElementById("status");
 const selCountEl = document.getElementById("selCount");
 const dlBtn = document.getElementById("download");
-const delSelBtn = document.getElementById("delSelected");
 
 const modal = document.getElementById("modal");
 const modalImg = document.getElementById("modalImg");
@@ -41,6 +40,7 @@ window.addEventListener("beforeunload", (e) => {
 let photos = [];                       // {id, fileUrl, thumbUrl, ext}
 let allVideos = [];                    // lista completa video (per ZIP + conteggio)
 let UID = "";                          // user id (dalle chiavi asset)
+let cursorIndex = -1;                  // cursore di navigazione da tastiera
 const videoMeta = new Map();           // videoId -> {thumb, total, extStart, created}
 const videoUrlById = new Map();        // videoId -> url download (assets full-res)
 const childrenByParent = new Map();    // parentId -> [videoId]  (catena estensioni)
@@ -51,7 +51,6 @@ const blobCache = new Map();
 function updateCount() {
   selCountEl.textContent = selected.size;
   dlBtn.disabled = selected.size === 0;
-  delSelBtn.disabled = selected.size === 0;
 }
 
 async function blobFor(url) {
@@ -117,25 +116,80 @@ async function listAllVideos() {
 }
 
 // ---- griglia -------------------------------------------------------------
+// ---- caricatore miniature robusto: coda a concorrenza limitata, abort fuori-vista,
+//      retry con backoff per errori transitori, fallback URL per i 404 -------------
+const MAX_THUMB = 6;
+let thumbInFlight = 0;
+const thumbQueue = [];
+const thumbTask = new Map(); // img -> task
+
+function loadThumb(img) {
+  const url = img.dataset.url;
+  if (!url) return;
+  if (blobCache.has(url)) { img.src = blobCache.get(url); img.closest(".card").classList.remove("loading"); return; }
+  if (thumbTask.has(img)) return;
+  const task = { img, url, fallback: img.dataset.fallback || "", tries: 0, fbTried: false, aborted: false, ctrl: null };
+  thumbTask.set(img, task);
+  thumbQueue.push(task);
+  pumpThumbs();
+}
+function cancelThumb(img) {
+  const t = thumbTask.get(img);
+  if (t) { t.aborted = true; if (t.ctrl) { try { t.ctrl.abort(); } catch (e) {} } thumbTask.delete(img); }
+}
+function pumpThumbs() {
+  while (thumbInFlight < MAX_THUMB && thumbQueue.length) {
+    const t = thumbQueue.shift();
+    if (t.aborted) { thumbTask.delete(t.img); continue; }
+    runThumb(t);
+  }
+}
+async function runThumb(t) {
+  thumbInFlight++;
+  try {
+    t.ctrl = new AbortController();
+    const res = await fetch(t.url, { credentials: "include", signal: t.ctrl.signal });
+    if (t.aborted) return;
+    if (res.ok) {
+      const obj = URL.createObjectURL(await res.blob());
+      blobCache.set(t.url, obj);
+      if (!t.aborted) { t.img.src = obj; t.img.closest(".card").classList.remove("loading"); }
+      thumbTask.delete(t.img);
+      return;
+    }
+    if (res.status === 404 && t.fallback && !t.fbTried) { t.fbTried = true; t.url = t.fallback; thumbQueue.push(t); return; }
+    if (res.status === 429 || res.status >= 500) throw new Error("http " + res.status);
+    t.img.closest(".card").classList.add("failed"); thumbTask.delete(t.img); // 404/403 definitivo
+  } catch (e) {
+    if (t.aborted) return;
+    t.tries++;
+    if (t.tries <= 4) {
+      const d = 300 * Math.pow(2, t.tries - 1); // 300,600,1200,2400ms
+      setTimeout(() => { if (!t.aborted) { thumbQueue.push(t); pumpThumbs(); } }, d);
+    } else { t.img.closest(".card").classList.add("failed"); thumbTask.delete(t.img); }
+  } finally {
+    thumbInFlight--;
+    pumpThumbs();
+  }
+}
+
 const io = new IntersectionObserver((entries) => {
   for (const en of entries) {
-    if (en.isIntersecting) {
-      const img = en.target;
-      io.unobserve(img);
-      blobFor(img.dataset.url).then((b) => (img.src = b)).catch(() => {});
-    }
+    if (en.isIntersecting) loadThumb(en.target);
+    else cancelThumb(en.target);
   }
-}, { rootMargin: "300px" });
+}, { rootMargin: "400px" });
 
 function render() {
   grid.innerHTML = "";
   for (const ph of photos) {
     const isVid = ph.type === "video";
     const card = document.createElement("div");
-    card.className = "card" + (selected.has(ph.id) ? " sel" : "");
+    card.className = "card loading" + (selected.has(ph.id) ? " sel" : "");
     card.innerHTML = `<div class="check">✓</div><img alt=""><span class="open">${isVid ? "▶ video" : "apri ▸"}</span>`;
     const img = card.querySelector("img");
-    if (ph.thumbUrl) { img.dataset.url = ph.thumbUrl; io.observe(img); }
+    if (ph.thumbUrl) { img.dataset.url = ph.thumbUrl; if (ph.thumbFallback) img.dataset.fallback = ph.thumbFallback; io.observe(img); }
+    else card.classList.remove("loading");
     card.querySelector(".check").addEventListener("click", (e) => {
       e.stopPropagation();
       toggle(ph.id, { url: ph.fileUrl, ext: ph.ext, sub: isVid ? "videos" : "images" });
@@ -144,6 +198,7 @@ function render() {
     card.addEventListener("click", () => (isVid ? playMedia(ph.fileUrl) : openPhoto(ph)));
     grid.appendChild(card);
   }
+  if (cursorIndex >= 0 && grid.children[cursorIndex]) grid.children[cursorIndex].classList.add("cursor");
 }
 
 function toggle(id, info) {
@@ -163,20 +218,6 @@ async function getPost(id) {
   });
   if (!r.ok) return null;
   return (await r.json()).post || null;
-}
-
-async function deletePost(id) {
-  // body ESATTO della richiesta che funziona: solo { id }
-  const r = await fetch(POST_DELETE, {
-    method: "POST", credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "x-xai-request-id": (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
-    },
-    body: JSON.stringify({ id })
-  });
-  return r.ok;
 }
 
 let lastPlayUrl = null;
@@ -201,18 +242,12 @@ function renderVideoTile(vid) {
   const thumb = meta.thumb || file;
   const tile = document.createElement("div");
   tile.className = "vtile" + (selected.has(vid) ? " sel" : "");
-  tile.innerHTML = `<div class="check">✓</div><button class="del" title="Elimina da Grok">🗑</button><img alt=""><span class="play">▶ ${meta.total || "?"}s</span>`;
+  tile.innerHTML = `<div class="check">✓</div><img alt=""><span class="play">▶ ${meta.total || "?"}s</span>`;
   if (thumb) blobFor(thumb).then((b) => (tile.querySelector("img").src = b)).catch(() => {});
   tile.querySelector(".check").addEventListener("click", (e) => {
     e.stopPropagation();
     toggle(vid, { url: file, ext: "mp4", sub: "videos" });
     tile.classList.toggle("sel", selected.has(vid));
-  });
-  tile.querySelector(".del").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    if (!confirm("Eliminare questo VIDEO da Grok? È definitivo.")) return;
-    if (await deletePost(vid)) { selected.delete(vid); tile.remove(); updateCount(); }
-    else alert("Eliminazione non riuscita per questo elemento.");
   });
   tile.addEventListener("click", () => playMedia(file));   // click sul riquadro = riproduci
   modalVideos.appendChild(tile);
@@ -266,17 +301,6 @@ modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList
 
 document.getElementById("vpClose").addEventListener("click", () => { vpVideo.pause(); vplayer.classList.add("hidden"); });
 vplayer.addEventListener("click", (e) => { if (e.target === vplayer) { vpVideo.pause(); vplayer.classList.add("hidden"); } });
-
-document.getElementById("delPhoto").addEventListener("click", async () => {
-  if (!currentPhoto) return;
-  if (!confirm("Eliminare questa FOTO da Grok (e i suoi video)? È definitivo.")) return;
-  if (await deletePost(currentPhoto.id)) {
-    photos = photos.filter((p) => p.id !== currentPhoto.id);
-    selected.delete(currentPhoto.id);
-    modal.classList.add("hidden");
-    render(); updateCount();
-  } else alert("Eliminazione non riuscita per questo elemento.");
-});
 
 
 // ---- ZIP streaming su disco (una sola conferma) --------------------------
@@ -349,27 +373,51 @@ async function zipDownload(list, zipName) {
 }
 
 // ---- pulsanti ------------------------------------------------------------
+function selInfo(ph) { return { url: ph.fileUrl, ext: ph.ext, sub: ph.type === "video" ? "videos" : "images" }; }
 document.getElementById("selAllPhotos").addEventListener("click", () => {
-  photos.forEach((ph) => selected.set(ph.id, { url: ph.fileUrl, ext: ph.ext, sub: "images" }));
+  photos.forEach((ph) => selected.set(ph.id, selInfo(ph)));
+  render(); updateCount();
+});
+document.getElementById("selInvert").addEventListener("click", () => {
+  photos.forEach((ph) => { if (selected.has(ph.id)) selected.delete(ph.id); else selected.set(ph.id, selInfo(ph)); });
   render(); updateCount();
 });
 document.getElementById("selNone").addEventListener("click", () => { selected.clear(); render(); updateCount(); });
 
-delSelBtn.addEventListener("click", async () => {
-  if (!selected.size) return;
-  const ids = [...selected.keys()];
-  if (!confirm(`Eliminare ${ids.length} elementi selezionati da Grok? È definitivo.`)) return;
-  delSelBtn.disabled = true; dlBtn.disabled = true;
-  const deleted = new Set();
-  let ok = 0, fail = 0;
-  for (let n = 0; n < ids.length; n++) {
-    if (await deletePost(ids[n])) { deleted.add(ids[n]); selected.delete(ids[n]); ok++; }
-    else fail++;
-    statusEl.textContent = `Elimino… ${n + 1}/${ids.length} (ok ${ok}, falliti ${fail})`;
+// ---- navigazione da tastiera: frecce = cursore, barra = seleziona, invio = apri ----
+function gridCols() {
+  const c = grid.children;
+  if (c.length < 2) return 1;
+  const top = c[0].offsetTop; let n = 1;
+  while (n < c.length && c[n].offsetTop === top) n++;
+  return n;
+}
+function setCursor(i) {
+  const c = grid.children;
+  if (!c.length) return;
+  i = Math.max(0, Math.min(i, c.length - 1));
+  if (cursorIndex >= 0 && c[cursorIndex]) c[cursorIndex].classList.remove("cursor");
+  cursorIndex = i;
+  c[i].classList.add("cursor");
+  c[i].scrollIntoView({ block: "nearest" });
+}
+document.addEventListener("keydown", (e) => {
+  if (!modal.classList.contains("hidden") || !vplayer.classList.contains("hidden")) return; // overlay aperto
+  if (e.target.tagName === "INPUT") return;
+  const c = grid.children;
+  if (!c.length) return;
+  const cur = cursorIndex < 0 ? 0 : cursorIndex;
+  let done = true;
+  switch (e.key) {
+    case "ArrowRight": setCursor(cur + 1); break;
+    case "ArrowLeft": setCursor(cur - 1); break;
+    case "ArrowDown": setCursor(cur + gridCols()); break;
+    case "ArrowUp": setCursor(cur - gridCols()); break;
+    case " ": if (cursorIndex >= 0) c[cursorIndex].querySelector(".check").click(); break;
+    case "Enter": if (cursorIndex >= 0) c[cursorIndex].click(); break;
+    default: done = false;
   }
-  photos = photos.filter((p) => !deleted.has(p.id));
-  render(); updateCount();
-  statusEl.textContent = `Eliminati ${ok}${fail ? `, ${fail} non eliminabili` : ""}.`;
+  if (done) e.preventDefault();
 });
 
 
@@ -419,7 +467,11 @@ async function buildVideoIndex(ids) {
 
 async function start() {
   await loadPhotos();
-  statusEl.textContent = `${photos.length} foto. Carico i video…`;
+  photos.sort((a, b) => (b.createTime || "").localeCompare(a.createTime || ""));
+  render();                                                   // mostra subito le foto
+  document.getElementById("galleryLoading").classList.add("hidden");
+  document.getElementById("zipImages").textContent = `⬇ Tutte le immagini (${photos.length})`;
+  statusEl.textContent = `${photos.length} foto. Indicizzo i video…`;
   const vlist = await listAllVideos();
   vlist.forEach((v) => videoUrlById.set(v.id, v.url));
   await buildVideoIndex(vlist.map((v) => v.id));
@@ -430,8 +482,11 @@ async function start() {
   let added = 0;
   for (const parentId of childrenByParent.keys()) {
     if (videoMeta.has(parentId) || existing.has(parentId)) continue; // e un video, o gia presente
+    const kids = childrenByParent.get(parentId) || [];
+    const poster = kids.length ? (videoMeta.get(kids[0]) || {}).thumb || "" : "";
     const fileUrl = ASSETS + `users/${UID}/${parentId}/content?cache=1`;
-    photos.push({ id: parentId, fileUrl, thumbUrl: fileUrl, ext: "jpg", createTime: "" });
+    // anteprima dal poster del video (affidabile); fallback = il content vero
+    photos.push({ id: parentId, fileUrl, thumbUrl: poster || fileUrl, thumbFallback: fileUrl, ext: "jpg", createTime: "" });
     existing.add(parentId); added++;
   }
   // aggiungi i "solo video" (t2v senza foto-base): una tessera per ogni terminale di catena
