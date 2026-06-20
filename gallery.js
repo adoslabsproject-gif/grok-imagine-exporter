@@ -3,7 +3,6 @@ import { makeZip } from "./vendor/client-zip.js";
 const ASSETS = "https://assets.grok.com/";
 const ASSETS_API = "https://grok.com/rest/assets";
 const POST_GET = "https://grok.com/rest/media/post/get";
-const POST_DELETE = "https://grok.com/rest/media/post/delete";
 const BULK_GET = "https://grok.com/rest/media/post/bulk-get";
 
 const grid = document.getElementById("grid");
