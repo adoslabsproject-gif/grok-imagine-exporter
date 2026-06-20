@@ -1,57 +1,57 @@
 # Grok Imagine Exporter
 
-Estensione Chrome (Manifest V3) per **esportare in blocco** le tue immagini e i tuoi video generati su [Grok Imagine](https://grok.com/imagine), direttamente nella cartella Download, con un clic.
+A Chrome & Firefox extension (Manifest V3) to **bulk-export** your generated images and videos from [Grok Imagine](https://grok.com/imagine) — straight to your Downloads folder, in one click.
 
-Niente copia-incolla in console, niente cookie da estrarre a mano: l'estensione usa la **tua sessione** già attiva.
+No console copy-pasting, no manual cookie extraction: the extension uses your **already-active session**.
 
-## Funziona così
+## Features
 
-- Enumera i tuoi asset tramite l'API ufficiale del sito (`/rest/assets`, con paginazione).
-- Scarica via `chrome.downloads` in sottocartelle ordinate (`videos/`, `images/`, `uploads/`).
-- Ricorda cosa hai già scaricato → puoi rilanciare e prende solo i nuovi (ripresa).
-- Grazie ai `host_permissions` l'estensione bypassa il CORS che blocca i normali script di pagina.
+- **Gallery panel** with thumbnails — browse your generations, click a photo to reveal its videos, select exactly what you want.
+- **Extension chains** — when a video was extended (e.g. 10s → 20s → 30s), only the **final/longest** clip is shown and downloaded; the redundant intermediate clips are skipped automatically.
+- **One-click ZIP** — download everything (or your selection) as a single archive, streamed straight to disk (handles GBs without filling memory, Chrome).
+- **Built-in player** — preview videos right in the gallery.
+- **Delete** — remove a photo/video (single or in bulk) from your Grok account.
+- **Bulk buttons** — grab all generated videos or all generated images at once.
 
-## Installazione (sviluppatore, una volta sola)
+## How it works
 
-1. Scarica/clona questa cartella.
-2. Apri **`chrome://extensions`**.
-3. Attiva in alto a destra **Modalità sviluppatore**.
-4. Clicca **Carica estensione non pacchettizzata** e seleziona questa cartella.
-5. Fissa l'icona nella barra. Fatto.
+- Lists your assets through the site's official API (`/rest/assets`, paginated) and resolves nested videos via `/rest/media/post/get` and `/rest/media/post/bulk-get`.
+- Loads previews and files through authenticated `fetch`, bypassing the third-party-cookie/CORS limits of normal page scripts (thanks to `host_permissions`).
+- Works on everything you generated — no need to "favorite" items first.
 
-Funziona anche su Edge, Brave, Opera (stesso motore Chromium).
+## Install
 
-## Uso
+### Chrome / Edge / Brave / Opera
+1. Download `grok-imagine-exporter-chrome.zip` from the [latest release](../../releases) and unzip it (or clone this repo).
+2. Open `chrome://extensions`.
+3. Enable **Developer mode** (top-right).
+4. Click **Load unpacked** and select the folder.
+5. Pin the icon to the toolbar.
 
-1. Apri **grok.com** ed effettua il login.
-2. Clicca l'icona dell'estensione.
-3. (Opzionale) cambia la cartella di destinazione.
-4. Premi **Scarica video** / **Scarica immagini** / **Upload**.
-5. Se Chrome chiede di **consentire download multipli**, accetta.
+### Firefox
+1. Download `grok-imagine-exporter-firefox.zip` from the [latest release](../../releases).
+2. Open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → pick the `manifest.json` inside the unzipped folder.
+3. For a permanent install, sign/publish it through [addons.mozilla.org](https://addons.mozilla.org/developers).
 
-I file finiscono in `Download/GrokExport/...`.
+> Note: building from source for Firefox uses `manifest.firefox.json` (run `bash package.sh` to produce both browser packages).
 
-## Limitazioni note
+## Usage
 
-- Le immagini **non salvate** del prompter diventano scaricabili solo dopo averle salvate/preferite nel sito.
-- L'estensione scarica **solo i contenuti del tuo account** (serve la tua sessione).
+1. Open **grok.com** and log in.
+2. Click the extension icon → **Open gallery**.
+3. Click a photo to see its videos, select what you want, then **Download selected (ZIP)** — or use **All videos / All images (ZIP)**.
 
-## Distribuzione
+> Tip (Chrome): turn off *"Ask where to save each file before downloading"* in `chrome://settings/downloads` for a fully silent export.
 
-Vedi sotto, nella sezione "Come divulgarla".
+## Limitations
 
-## Licenza
+- Prompter images that were never saved become downloadable only after you save/favorite them on the site.
+- The extension only accesses **your own account** content (it relies on your session).
 
-MIT — vedi [LICENSE](LICENSE). Usala, modificala, ridistribuiscila liberamente.
+## License
+
+MIT — see [LICENSE](LICENSE). Use it, modify it, redistribute it freely.
 
 ## Disclaimer
 
-Strumento per scaricare **i tuoi contenuti**. Rispetta i Termini di Servizio di Grok/xAI e le leggi locali. Non affiliato a xAI.
-
-## Galleria con nesting (foto → video annidati)
-
-La galleria (`gallery.html`) usa l'API ufficiale reverse-engineered dal bundle dell'app:
-- `GET /rest/assets` — elenca i tuoi asset (foto/video generati).
-- `POST /rest/media/post/get` con `{ "id": <postId> }` — restituisce una foto con i suoi **video annidati** (`videos[]`, con `mediaUrl`, `thumbnailImageUrl`, `prompt`).
-
-Flusso: griglia di foto → clicchi una foto → si aprono i **video legati a quella foto** → selezioni foto e/o video → **Scarica selezionati**. Anteprime caricate via `fetch` autenticato (niente problemi di cookie di terze parti).
+A tool to export **your own content**. Respect Grok/xAI's Terms of Service and your local laws. Not affiliated with xAI.
