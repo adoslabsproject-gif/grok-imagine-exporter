@@ -41,9 +41,10 @@ window.addEventListener("beforeunload", (e) => {
 let photos = [];                       // {id, fileUrl, thumbUrl, ext}
 let allVideos = [];                    // lista completa video (per ZIP + conteggio)
 let UID = "";                          // user id (dalle chiavi asset)
-const videoMeta = new Map();           // videoId -> {thumb, dur, extStart}
+const videoMeta = new Map();           // videoId -> {thumb, total, extStart, created}
 const videoUrlById = new Map();        // videoId -> url download (assets full-res)
 const childrenByParent = new Map();    // parentId -> [videoId]  (catena estensioni)
+const rootVideos = new Set();          // video senza foto-base (t2v "solo video")
 const selected = new Map();            // id -> {url, ext, sub}
 const blobCache = new Map();
 
@@ -129,18 +130,18 @@ const io = new IntersectionObserver((entries) => {
 function render() {
   grid.innerHTML = "";
   for (const ph of photos) {
+    const isVid = ph.type === "video";
     const card = document.createElement("div");
     card.className = "card" + (selected.has(ph.id) ? " sel" : "");
-    card.innerHTML = `<div class="check">✓</div><img alt=""><span class="open">apri ▸</span>`;
+    card.innerHTML = `<div class="check">✓</div><img alt=""><span class="open">${isVid ? "▶ video" : "apri ▸"}</span>`;
     const img = card.querySelector("img");
-    img.dataset.url = ph.thumbUrl;
-    io.observe(img);
+    if (ph.thumbUrl) { img.dataset.url = ph.thumbUrl; io.observe(img); }
     card.querySelector(".check").addEventListener("click", (e) => {
       e.stopPropagation();
-      toggle(ph.id, { url: ph.fileUrl, ext: ph.ext, sub: "images" });
+      toggle(ph.id, { url: ph.fileUrl, ext: ph.ext, sub: isVid ? "videos" : "images" });
       card.classList.toggle("sel", selected.has(ph.id));
     });
-    card.addEventListener("click", () => openPhoto(ph));
+    card.addEventListener("click", () => (isVid ? playMedia(ph.fileUrl) : openPhoto(ph)));
     grid.appendChild(card);
   }
 }
@@ -401,11 +402,13 @@ async function buildVideoIndex(ids) {
         const posts = (await r.json()).posts || [];
         for (const v of posts) {
           const extStart = v.videoExtensionStartTime || 0;
-          videoMeta.set(v.id, { thumb: v.thumbnailImageUrl || "", total: extStart + (v.videoDuration || 0), extStart });
+          videoMeta.set(v.id, { thumb: v.thumbnailImageUrl || "", total: extStart + (v.videoDuration || 0), extStart, created: v.createTime || "" });
           const par = v.originalPostId;
           if (par) {
             if (!childrenByParent.has(par)) childrenByParent.set(par, []);
             childrenByParent.get(par).push(v.id);
+          } else {
+            rootVideos.add(v.id); // nessun genitore = "solo video" (t2v)
           }
         }
       }
@@ -431,11 +434,22 @@ async function start() {
     photos.push({ id: parentId, fileUrl, thumbUrl: fileUrl, ext: "jpg", createTime: "" });
     existing.add(parentId); added++;
   }
+  // aggiungi i "solo video" (t2v senza foto-base): una tessera per ogni terminale di catena
+  let soloVid = 0;
+  for (const rootId of rootVideos) {
+    const chain = [rootId, ...collectDescendantVideos(rootId)];
+    for (const vid of chain) {
+      if (childrenByParent.has(vid) || existing.has(vid)) continue; // non terminale o gia presente
+      const m = videoMeta.get(vid) || {};
+      photos.push({ id: vid, type: "video", fileUrl: videoUrlById.get(vid), thumbUrl: m.thumb || "", ext: "mp4", createTime: m.created || "" });
+      existing.add(vid); soloVid++;
+    }
+  }
   // ordina come la galleria di Grok: per data di creazione, dal piu recente
   photos.sort((a, b) => (b.createTime || "").localeCompare(a.createTime || ""));
   render();
   document.getElementById("zipImages").textContent = `⬇ Tutte le immagini (${photos.length})`;
   document.getElementById("zipVideos").textContent = `⬇ Tutti i video finali (${allVideos.length})`;
-  statusEl.textContent = `${photos.length} foto (${added} con origine diversa recuperate) · ${allVideos.length} video finali. Clicca una foto per i suoi video.`;
+  statusEl.textContent = `${photos.length} elementi (incl. ${soloVid} solo-video, ${added} foto origine diversa) · ${allVideos.length} video finali. Clicca una foto per i suoi video, un video per riprodurlo.`;
 }
 start().catch((e) => (statusEl.textContent = "❌ " + (e.message || e)));
