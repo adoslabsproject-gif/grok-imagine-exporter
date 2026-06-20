@@ -82,7 +82,7 @@ async function loadPhotos() {
       if (!UID) { const m = key.match(/^users\/([^/]+)\//); if (m) UID = m[1]; }
       const ext = a.mimeType === "image/png" ? "png" : a.mimeType === "image/webp" ? "webp" : "jpg";
       const fileUrl = ASSETS + key + "?cache=1";
-      photos.push({ id: a.assetId, fileUrl, thumbUrl: fileUrl, ext });
+      photos.push({ id: a.assetId, fileUrl, thumbUrl: fileUrl, ext, createTime: a.createTime || "" });
     });
     token = d.nextPageToken;
     statusEl.textContent = `Carico foto… ${photos.length}`;
@@ -165,11 +165,15 @@ async function getPost(id) {
 }
 
 async function deletePost(id) {
-  // forma ufficiale dal bundle dell'app: { id, isHiddenForClient }
+  // body ESATTO della richiesta che funziona: solo { id }
   const r = await fetch(POST_DELETE, {
     method: "POST", credentials: "include",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ id, isHiddenForClient: false })
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "x-xai-request-id": (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
+    },
+    body: JSON.stringify({ id })
   });
   return r.ok;
 }
@@ -207,7 +211,7 @@ function renderVideoTile(vid) {
     e.stopPropagation();
     if (!confirm("Eliminare questo VIDEO da Grok? È definitivo.")) return;
     if (await deletePost(vid)) { selected.delete(vid); tile.remove(); updateCount(); }
-    else alert("Eliminazione non riuscita.");
+    else alert("Eliminazione non riuscita per questo elemento.");
   });
   tile.addEventListener("click", () => playMedia(file));   // click sul riquadro = riproduci
   modalVideos.appendChild(tile);
@@ -264,14 +268,15 @@ vplayer.addEventListener("click", (e) => { if (e.target === vplayer) { vpVideo.p
 
 document.getElementById("delPhoto").addEventListener("click", async () => {
   if (!currentPhoto) return;
-  if (!confirm("Eliminare questa FOTO da Grok (e i suoi video annidati)? È definitivo.")) return;
+  if (!confirm("Eliminare questa FOTO da Grok (e i suoi video)? È definitivo.")) return;
   if (await deletePost(currentPhoto.id)) {
     photos = photos.filter((p) => p.id !== currentPhoto.id);
     selected.delete(currentPhoto.id);
     modal.classList.add("hidden");
     render(); updateCount();
-  } else alert("Eliminazione non riuscita (l'endpoint potrebbe richiedere un campo diverso).");
+  } else alert("Eliminazione non riuscita per questo elemento.");
 });
+
 
 // ---- ZIP streaming su disco (una sola conferma) --------------------------
 async function zipDownload(list, zipName) {
@@ -363,8 +368,9 @@ delSelBtn.addEventListener("click", async () => {
   }
   photos = photos.filter((p) => !deleted.has(p.id));
   render(); updateCount();
-  statusEl.textContent = `Eliminati ${ok} elementi${fail ? `, ${fail} falliti` : ""}.`;
+  statusEl.textContent = `Eliminati ${ok}${fail ? `, ${fail} non eliminabili` : ""}.`;
 });
+
 
 dlBtn.addEventListener("click", () => {
   const list = [...selected.entries()].map(([id, info]) => ({ url: info.url, name: `${info.sub}/${id}.${info.ext}` }));
@@ -422,9 +428,11 @@ async function start() {
   for (const parentId of childrenByParent.keys()) {
     if (videoMeta.has(parentId) || existing.has(parentId)) continue; // e un video, o gia presente
     const fileUrl = ASSETS + `users/${UID}/${parentId}/content?cache=1`;
-    photos.push({ id: parentId, fileUrl, thumbUrl: fileUrl, ext: "jpg" });
+    photos.push({ id: parentId, fileUrl, thumbUrl: fileUrl, ext: "jpg", createTime: "" });
     existing.add(parentId); added++;
   }
+  // ordina come la galleria di Grok: per data di creazione, dal piu recente
+  photos.sort((a, b) => (b.createTime || "").localeCompare(a.createTime || ""));
   render();
   document.getElementById("zipImages").textContent = `⬇ Tutte le immagini (${photos.length})`;
   document.getElementById("zipVideos").textContent = `⬇ Tutti i video finali (${allVideos.length})`;
