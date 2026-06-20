@@ -40,6 +40,7 @@ window.addEventListener("beforeunload", (e) => {
 
 let photos = [];                       // {id, fileUrl, thumbUrl, ext}
 let allVideos = [];                    // lista completa video (per ZIP + conteggio)
+let UID = "";                          // user id (dalle chiavi asset)
 const videoMeta = new Map();           // videoId -> {thumb, dur, extStart}
 const videoUrlById = new Map();        // videoId -> url download (assets full-res)
 const childrenByParent = new Map();    // parentId -> [videoId]  (catena estensioni)
@@ -78,6 +79,7 @@ async function loadPhotos() {
     const d = await r.json();
     (d.assets || []).forEach((a) => {
       const key = a.key || `users/x/${a.assetId}/content`;
+      if (!UID) { const m = key.match(/^users\/([^/]+)\//); if (m) UID = m[1]; }
       const ext = a.mimeType === "image/png" ? "png" : a.mimeType === "image/webp" ? "webp" : "jpg";
       const fileUrl = ASSETS + key + "?cache=1";
       photos.push({ id: a.assetId, fileUrl, thumbUrl: fileUrl, ext });
@@ -97,7 +99,7 @@ async function listAllVideos() {
     p.set("pageSize", "100");
     p.append("mimeTypes", "video/mp4");
     p.append("orderBy", "ORDER_BY_LAST_USE_TIME");
-    p.append("source", "SOURCE_GENERATED");
+    p.append("source", "SOURCE_ANY");
     p.append("includeImagineFiles", "true");
     if (token) p.set("pageToken", token);
     const r = await fetch(`${ASSETS_API}?${p.toString()}`, { credentials: "include", headers: { Accept: "application/json" } });
@@ -408,14 +410,24 @@ async function buildVideoIndex(ids) {
 
 async function start() {
   await loadPhotos();
-  document.getElementById("zipImages").textContent = `⬇ Tutte le immagini (${photos.length})`;
   statusEl.textContent = `${photos.length} foto. Carico i video…`;
   const vlist = await listAllVideos();
   vlist.forEach((v) => videoUrlById.set(v.id, v.url));
   await buildVideoIndex(vlist.map((v) => v.id));
   // tieni solo i TERMINALI: escludi gli intermedi (id che e genitore di un'estensione)
   allVideos = vlist.filter((v) => !childrenByParent.has(v.id));
+  // aggiungi le foto-radice che hanno video ma non erano in SOURCE_GENERATED (origini diverse)
+  const existing = new Set(photos.map((p) => p.id));
+  let added = 0;
+  for (const parentId of childrenByParent.keys()) {
+    if (videoMeta.has(parentId) || existing.has(parentId)) continue; // e un video, o gia presente
+    const fileUrl = ASSETS + `users/${UID}/${parentId}/content?cache=1`;
+    photos.push({ id: parentId, fileUrl, thumbUrl: fileUrl, ext: "jpg" });
+    existing.add(parentId); added++;
+  }
+  render();
+  document.getElementById("zipImages").textContent = `⬇ Tutte le immagini (${photos.length})`;
   document.getElementById("zipVideos").textContent = `⬇ Tutti i video finali (${allVideos.length})`;
-  statusEl.textContent = `${photos.length} foto · ${allVideos.length} video finali (esclusi gli intermedi più corti). Clicca una foto per i suoi video.`;
+  statusEl.textContent = `${photos.length} foto (${added} con origine diversa recuperate) · ${allVideos.length} video finali. Clicca una foto per i suoi video.`;
 }
 start().catch((e) => (statusEl.textContent = "❌ " + (e.message || e)));
