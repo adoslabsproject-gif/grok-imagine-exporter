@@ -477,15 +477,20 @@ async function start() {
   // tieni solo i TERMINALI: escludi gli intermedi (id che e genitore di un'estensione)
   allVideos = vlist.filter((v) => !childrenByParent.has(v.id));
   // aggiungi le foto-radice che hanno video ma non erano in SOURCE_GENERATED (origini diverse)
+  // recupera OGNI foto-radice referenziata dai video, incluse quelle CANCELLATE
+  // (il loro contenuto/poster e ancora sui server di Grok -> le mostriamo)
   const existing = new Set(photos.map((p) => p.id));
   let added = 0;
   for (const parentId of childrenByParent.keys()) {
     if (videoMeta.has(parentId) || existing.has(parentId)) continue; // e un video, o gia presente
     const kids = childrenByParent.get(parentId) || [];
-    const poster = kids.length ? (videoMeta.get(kids[0]) || {}).thumb || "" : "";
+    const m0 = kids.length ? (videoMeta.get(kids[0]) || {}) : {};
     const fileUrl = ASSETS + `users/${UID}/${parentId}/content?cache=1`;
-    // anteprima dal poster del video (affidabile); fallback = il content vero
-    photos.push({ id: parentId, fileUrl, thumbUrl: poster || fileUrl, thumbFallback: fileUrl, ext: "jpg", createTime: "" });
+    photos.push({
+      id: parentId, fileUrl,
+      thumbUrl: m0.thumb || fileUrl, thumbFallback: fileUrl,
+      ext: "jpg", createTime: m0.created || ""  // data ~ dal primo video, per l'ordinamento
+    });
     existing.add(parentId); added++;
   }
   // aggiungi i "solo video" (t2v senza foto-base): una tessera per ogni terminale di catena
