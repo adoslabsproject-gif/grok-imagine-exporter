@@ -186,11 +186,13 @@ function render() {
     const isVid = ph.type === "video";
     const card = document.createElement("div");
     card.className = "card loading" + (selected.has(ph.id) ? " sel" : "");
-    card.innerHTML = `<div class="check">✓</div><img alt=""><span class="open">${isVid ? "▶ video" : "apri ▸"}</span>`;
-    const img = card.querySelector("img");
+    const check = document.createElement("div"); check.className = "check"; check.textContent = "✓";
+    const img = document.createElement("img"); img.alt = "";
+    const open = document.createElement("span"); open.className = "open"; open.textContent = isVid ? "▶ video" : "apri ▸";
+    card.append(check, img, open);
     if (ph.thumbUrl) { img.dataset.url = ph.thumbUrl; if (ph.thumbFallback) img.dataset.fallback = ph.thumbFallback; io.observe(img); }
     else card.classList.remove("loading");
-    card.querySelector(".check").addEventListener("click", (e) => {
+    check.addEventListener("click", (e) => {
       e.stopPropagation();
       toggle(ph.id, { url: ph.fileUrl, ext: ph.ext, sub: isVid ? "videos" : "images" });
       card.classList.toggle("sel", selected.has(ph.id));
@@ -242,9 +244,12 @@ function renderVideoTile(vid) {
   const thumb = meta.thumb || file;
   const tile = document.createElement("div");
   tile.className = "vtile" + (selected.has(vid) ? " sel" : "");
-  tile.innerHTML = `<div class="check">✓</div><img alt=""><span class="play">▶ ${meta.total || "?"}s</span>`;
-  if (thumb) blobFor(thumb).then((b) => (tile.querySelector("img").src = b)).catch(() => {});
-  tile.querySelector(".check").addEventListener("click", (e) => {
+  const check = document.createElement("div"); check.className = "check"; check.textContent = "✓";
+  const img = document.createElement("img"); img.alt = "";
+  const play = document.createElement("span"); play.className = "play"; play.textContent = `▶ ${meta.total || "?"}s`;
+  tile.append(check, img, play);
+  if (thumb) blobFor(thumb).then((b) => (img.src = b)).catch(() => {});
+  check.addEventListener("click", (e) => {
     e.stopPropagation();
     toggle(vid, { url: file, ext: "mp4", sub: "videos" });
     tile.classList.toggle("sel", selected.has(vid));
