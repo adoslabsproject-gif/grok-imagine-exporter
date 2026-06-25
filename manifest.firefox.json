@@ -3,6 +3,7 @@
   "name": "Grok Imagine Exporter",
   "version": "1.0.3",
   "description": "Esporta in blocco le tue immagini e i tuoi video generati su Grok Imagine nella cartella Download.",
+  "author": "Nicola Cucurachi",
   "permissions": [
     "downloads"
   ],
